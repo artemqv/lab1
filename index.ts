@@ -1,6 +1,8 @@
-// =====================
-// 1. User
-// =====================
+
+
+
+//юзер
+
 
 interface User {
   id: number
@@ -26,9 +28,7 @@ function createUser(
 const user1 = createUser(1, "Alex", "alex@mail.com")
 const user2 = createUser(2, "Bob")
 
-// =====================
-// 2. Book + Union Type
-// =====================
+//книга
 
 type Genre = 'fiction' | 'non-fiction'
 
@@ -56,9 +56,8 @@ const book2 = createBook({
   genre: 'non-fiction'
 })
 
-// =====================
-// 3. calculateArea (перегрузка)
-// =====================
+
+//перегрузка
 
 function calculateArea(shape: 'circle', radius: number): number
 function calculateArea(shape: 'square', side: number): number
@@ -75,9 +74,8 @@ function calculateArea(
 const circleArea = calculateArea('circle', 10)
 const squareArea = calculateArea('square', 5)
 
-// =====================
-// 4. Status
-// =====================
+//статус
+
 
 type Status = 'active' | 'inactive' | 'new'
 
@@ -95,9 +93,7 @@ function getStatusColor(status: Status): string {
 getStatusColor('active')
 getStatusColor('new')
 
-// =====================
-// 5. StringFormatter
-// =====================
+//"стринг форматтер"
 
 type StringFormatter = (value: string, uppercase?: boolean) => string
 
@@ -115,9 +111,7 @@ capitalizeFirst("typescript")
 trimAndFormat("  hello world  ")
 trimAndFormat("  hello world  ", true)
 
-// =====================
-// 6. Generic getFirstElement
-// =====================
+//генерик
 
 function getFirstElement<T>(arr: T[]): T | undefined {
   return arr[0]
@@ -130,9 +124,8 @@ getFirstElement(numbers)
 getFirstElement(strings)
 getFirstElement([])
 
-// =====================
-// 7. findById + constraint
-// =====================
+//файнд бай айди
+
 
 interface HasId {
   id: number
@@ -161,3 +154,19 @@ console.log("CIRCLEAREA: ", circleArea)
 console.log("squareArea: ", squareArea)
 
 
+export {
+  createUser,
+  createBook,
+  calculateArea,
+  getStatusColor,
+  capitalizeFirst,
+  trimAndFormat,
+  getFirstElement,
+  findById,
+  User,
+  Book,
+  Genre,
+  Status,
+  StringFormatter,
+  HasId
+};
