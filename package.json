@@ -1,10 +1,15 @@
 {
   "devDependencies": {
-    "@types/jest": "^30.0.0",
     "@vitest/coverage-v8": "^4.0.18",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "build": "tsc",
+    "start": "node dist/index.js"
   }
 }

@@ -155,7 +155,7 @@ console.log("squareArea: ", squareArea)
 
 
 export {
-  createUser,
+  
   createBook,
   calculateArea,
   getStatusColor,
@@ -163,10 +163,4 @@ export {
   trimAndFormat,
   getFirstElement,
   findById,
-  User,
-  Book,
-  Genre,
-  Status,
-  StringFormatter,
-  HasId
 };
