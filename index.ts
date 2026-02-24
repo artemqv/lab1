@@ -1,3 +1,5 @@
+import { readFile, writeFile } from 'node:fs/promises'
+
 export interface User {
   id: number
   name: string
@@ -139,10 +141,67 @@ const users = [
 
 const foundUser = findById(users, 2)
 
-console.log("status:", getStatusColor('active'))
-console.log("USER1: ", user1)
-console.log("USER2: ", user2)
-console.log("BOOK1: ", book1)
-console.log("BOOK2: ", book2)
-console.log("CIRCLEAREA: ", circleArea)
-console.log("squareArea: ", squareArea)
+
+//конвертация csv в JSON
+function csvToJSON(input: string[], delimiter: string): object[] {
+  if (!input || input.length === 0) {
+    throw new Error('Input array is empty')
+  }
+
+  //Разделяем заголовки
+  const headers = input[0].split(delimiter)
+  
+  //Проверяем empty headers
+  if (headers.length === 0 || headers.some(h => !h.trim())) {
+    throw new Error('Empty headers')
+  }
+
+  const result: object[] = []
+
+  for (let i = 1; i < input.length; i++) {
+    const values = input[i].split(delimiter)
+    
+    if (values.length !== headers.length) {
+      throw new Error(`Row ${i} has ${values.length} values, expected ${headers.length}`)
+    }
+
+    // Создаем объект
+    const obj: any = {}
+    for (let j = 0; j < headers.length; j++) {
+      const value = values[j].trim()
+      const num = Number(value)
+      obj[headers[j].trim()] = isNaN(num) || value === '' ? value : num
+    }
+    
+    result.push(obj)
+  }
+
+  return result
+}
+
+async function formatCSVFileToJSONFile(
+  input: string, 
+  output: string, 
+  delimiter: string
+): Promise<void> {
+  try {
+    // Читаем файл
+    const data = await readFile(input, 'utf-8')
+    
+    // Разбиваем на строки и фильтруем пустые
+    const lines = data.split('\n').filter(line => line.trim() !== '')
+    
+    // Конвертируем в JSON
+    const jsonData = csvToJSON(lines, delimiter)
+    
+    // Записываем результат
+    await writeFile(output, JSON.stringify(jsonData, null, 2), 'utf-8')
+  } catch (error) {
+    throw new Error(`Failed to process CSV file:`)
+  }
+}
+
+export {
+  csvToJSON,          
+  formatCSVFileToJSONFile,
+}
