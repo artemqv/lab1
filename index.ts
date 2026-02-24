@@ -1,17 +1,11 @@
-
-
-
-//юзер
-
-
-interface User {
+export interface User {
   id: number
   name: string
   email?: string
   isActive: boolean
 }
 
-function createUser(
+export function createUser(
   id: number,
   name: string,
   email?: string,
@@ -30,16 +24,16 @@ const user2 = createUser(2, "Bob")
 
 //книга
 
-type Genre = 'fiction' | 'non-fiction'
+export type Genre = 'fiction' | 'non-fiction'
 
-interface Book {
+export interface Book {
   title: string
   author: string
   year?: number
   genre: Genre
 }
 
-function createBook(book: Book): Book {
+export function createBook(book: Book): Book {
   return book
 }
 
@@ -59,9 +53,9 @@ const book2 = createBook({
 
 //перегрузка
 
-function calculateArea(shape: 'circle', radius: number): number
-function calculateArea(shape: 'square', side: number): number
-function calculateArea(
+export function calculateArea(shape: 'circle', radius: number): number
+export function calculateArea(shape: 'square', side: number): number
+export function calculateArea(
   shape: 'circle' | 'square',
   value: number
 ): number {
@@ -77,9 +71,9 @@ const squareArea = calculateArea('square', 5)
 //статус
 
 
-type Status = 'active' | 'inactive' | 'new'
+export type Status = 'active' | 'inactive' | 'new'
 
-function getStatusColor(status: Status): string {
+export function getStatusColor(status: Status): string {
   switch (status) {
     case 'active':
       return 'green'
@@ -95,14 +89,14 @@ getStatusColor('new')
 
 //"стринг форматтер"
 
-type StringFormatter = (value: string, uppercase?: boolean) => string
+export type StringFormatter = (value: string, uppercase?: boolean) => string
 
-const capitalizeFirst: StringFormatter = (value) => {
+export const capitalizeFirst: StringFormatter = (value) => {
   if (!value) return value
   return value[0].toUpperCase() + value.slice(1)
 }
 
-const trimAndFormat: StringFormatter = (value, uppercase = false) => {
+export const trimAndFormat: StringFormatter = (value, uppercase = false) => {
   const trimmed = value.trim()
   return uppercase ? trimmed.toUpperCase() : trimmed
 }
@@ -113,7 +107,7 @@ trimAndFormat("  hello world  ", true)
 
 //генерик
 
-function getFirstElement<T>(arr: T[]): T | undefined {
+export function getFirstElement<T>(arr: T[]): T | undefined {
   return arr[0]
 }
 
@@ -127,11 +121,11 @@ getFirstElement([])
 //файнд бай айди
 
 
-interface HasId {
+export interface HasId {
   id: number
 }
 
-function findById<T extends HasId>(
+export function findById<T extends HasId>(
   items: T[],
   id: number
 ): T | undefined {
@@ -152,15 +146,3 @@ console.log("BOOK1: ", book1)
 console.log("BOOK2: ", book2)
 console.log("CIRCLEAREA: ", circleArea)
 console.log("squareArea: ", squareArea)
-
-
-export {
-  
-  createBook,
-  calculateArea,
-  getStatusColor,
-  capitalizeFirst,
-  trimAndFormat,
-  getFirstElement,
-  findById,
-};

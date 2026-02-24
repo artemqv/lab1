@@ -1,6 +1,7 @@
-// =====================
-// 1. User
-// =====================
+//юзер
+
+
+
 function createUser(id, name, email, isActive) {
     if (isActive === void 0) { isActive = true; }
     return {
@@ -59,9 +60,10 @@ var trimAndFormat = function (value, uppercase) {
 capitalizeFirst("typescript");
 trimAndFormat("  hello world  ");
 trimAndFormat("  hello world  ", true);
-// =====================
-// 6. Generic getFirstElement
-// =====================
+
+//генерик
+
+
 function getFirstElement(arr) {
     return arr[0];
 }

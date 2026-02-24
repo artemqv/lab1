@@ -8,8 +8,8 @@ import {
   capitalizeFirst,
   trimAndFormat,
   getFirstElement,
-  findById
-} from './index'; 
+  findById,
+}from './index.ts'
 
 describe('User functions', () => {
   it('createUser creates user with correct properties', () => {
