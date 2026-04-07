@@ -10,7 +10,7 @@ describe("Lab 6: Utility Types", () => {
     };
     type Result = DeepReadonly<Nested>;
 
-    // Проверяем, что теперь это readonly
+
     expectTypeOf<Result>().toEqualTypeOf<{
       readonly a: number;
       readonly b: { readonly c: string };
