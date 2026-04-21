@@ -1,0 +1,53 @@
+/* Базовые стили остаются теми же */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0f172a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  overflow: hidden; /* Запрещаем скролл всей страницы */
+}
+
+.app-container {
+  width: 360px;
+  height: 780px; /* Фиксированная высота "телефона" */
+  background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%);
+  border-radius: 45px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  overflow: hidden; 
+}
+
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto; 
+  padding-bottom: 20px;
+  scrollbar-width: none; 
+}
+
+.scrollable-content::-webkit-scrollbar {
+  display: none; 
+}
+
+.forecast-panel {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  border-top-left-radius: 40px;
+  border-top-right-radius: 40px;
+  padding: 30px;
+  margin-top: 10px;
+  min-height: 400px; /* Чтобы панель тянулась вниз */
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Фиксированный поиск сверху */
+.search-box {
+  padding: 30px 20px 10px;
+  z-index: 10;
+}
