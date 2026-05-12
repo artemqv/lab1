@@ -52,7 +52,6 @@ const Dashboard = ({ onSelectDoc }: { onSelectDoc: (id: string) => void }) => {
             <div className="text-blue-500 font-bold mb-1 text-xs uppercase tracking-widest">ID: {doc.id}</div>
             <div className="text-xl font-bold text-[var(--text-main)]">{doc.name}</div>
             <div className="text-[var(--text-muted)] text-sm mt-4 italic">Изменен: {doc.date}</div>
-            
             <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={(e) => renameDoc(doc.id, e)} className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs">✏️</button>
               <button onClick={(e) => deleteDoc(doc.id, e)} className="p-2 bg-red-900 hover:bg-red-800 rounded-lg text-xs">🗑️</button>
