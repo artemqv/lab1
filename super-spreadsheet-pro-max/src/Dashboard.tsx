@@ -3,14 +3,18 @@ import { useAppDispatch, useAppSelector } from './store/hooks';
 import { addDocument, updateDocument, deleteDocument, duplicateDocument } from './store/documentsSlice';
 import { setShowCreateModal } from './store/uiSlice';
 
+// Компонент дашборда со списком документов
 const Dashboard = ({ onSelectDoc }: { onSelectDoc: (id: string) => void }) => {
   const dispatch = useAppDispatch();
   const docs = useAppSelector((state) => state.documents.list);
   const showCreateModal = useAppSelector((state) => state.ui.showCreateModal);
+
+  // Состояние для формы создания документа
   const [newDocName, setNewDocName] = useState('');
   const [newDocRows, setNewDocRows] = useState(100);
   const [newDocCols, setNewDocCols] = useState(26);
 
+  // Создание нового документа
   const addDoc = () => {
     if (newDocName.trim()) {
       const newDoc = {
@@ -29,6 +33,7 @@ const Dashboard = ({ onSelectDoc }: { onSelectDoc: (id: string) => void }) => {
     }
   };
 
+  // Переименование документа
   const renameDoc = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const newName = prompt("Введите новое название:");
@@ -37,6 +42,7 @@ const Dashboard = ({ onSelectDoc }: { onSelectDoc: (id: string) => void }) => {
     }
   };
 
+  // Удаление документа
   const deleteDoc = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm("Удалить этот документ?")) {
@@ -44,6 +50,7 @@ const Dashboard = ({ onSelectDoc }: { onSelectDoc: (id: string) => void }) => {
     }
   };
 
+  // Дублирование документа
   const duplicateDoc = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const docToCopy = docs.find((doc: any) => doc.id === id);
@@ -53,6 +60,7 @@ const Dashboard = ({ onSelectDoc }: { onSelectDoc: (id: string) => void }) => {
     }
   };
 
+  // Получение превью документа (первые 3x3 ячейки)
   const getPreview = (docId: string) => {
     try {
       const saved = localStorage.getItem(`spreadsheet_data_${docId}`);

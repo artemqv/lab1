@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit';
 
-// интерфейс документа
+// Интерфейс документа
 interface Document {
   id: string;
   name: string;
@@ -10,7 +10,7 @@ interface Document {
   cols?: number;
 }
 
-// состояние списка документов
+// Состояние списка документов
 interface DocumentsState {
   list: Document[];
   activeDocId: string | null;
@@ -25,12 +25,11 @@ const initialState: DocumentsState = {
   error: null,
 };
 
-// Async thunks для имитации работы с API
-// загрузка списка документов
+// Загрузка списка документов из localStorage
 export const loadDocuments = createAsyncThunk(
   'documents/loadDocuments',
   async () => {
-    // имитация загрузки с сервера
+    // Имитация загрузки с сервера
     await new Promise(resolve => setTimeout(resolve, 300));
     try {
       const savedDocs = localStorage.getItem('spreadsheet_list');
@@ -44,16 +43,17 @@ export const loadDocuments = createAsyncThunk(
   }
 );
 
-// сохранение документа
+// Сохранение документа в localStorage
 export const saveDocument = createAsyncThunk(
   'documents/saveDocument',
-  async ({ docId, grid, colWidths, rowHeights }: { docId: string; grid: string[][]; colWidths: number[]; rowHeights: number[] }) => {
-    // имитация сохранения на сервер
+  async ({ docId, grid, colWidths, rowHeights, cellStyles }: { docId: string; grid: string[][]; colWidths: number[]; rowHeights: number[]; cellStyles: Record<string, any> }) => {
+    // Имитация сохранения на сервер
     await new Promise(resolve => setTimeout(resolve, 200));
     try {
       localStorage.setItem(`spreadsheet_data_${docId}`, JSON.stringify(grid));
       localStorage.setItem(`spreadsheet_colwidths_${docId}`, JSON.stringify(colWidths));
       localStorage.setItem(`spreadsheet_rowheights_${docId}`, JSON.stringify(rowHeights));
+      localStorage.setItem(`spreadsheet_cellstyles_${docId}`, JSON.stringify(cellStyles));
     } catch (e) {
       console.error('Failed to save document:', e);
     }
@@ -61,26 +61,28 @@ export const saveDocument = createAsyncThunk(
   }
 );
 
-// загрузка одного документа
+// Загрузка одного документа из localStorage
 export const loadDocument = createAsyncThunk(
   'documents/loadDocument',
   async (docId: string) => {
-    // имитация загрузки документа с сервера
+    // Имитация загрузки документа с сервера
     await new Promise(resolve => setTimeout(resolve, 200));
     try {
       const saved = localStorage.getItem(`spreadsheet_data_${docId}`);
       const savedColWidths = localStorage.getItem(`spreadsheet_colwidths_${docId}`);
       const savedRowHeights = localStorage.getItem(`spreadsheet_rowheights_${docId}`);
-      
+      const savedCellStyles = localStorage.getItem(`spreadsheet_cellstyles_${docId}`);
+
       return {
         docId,
         grid: saved ? JSON.parse(saved) : null,
         colWidths: savedColWidths ? JSON.parse(savedColWidths) : null,
         rowHeights: savedRowHeights ? JSON.parse(savedRowHeights) : null,
+        cellStyles: savedCellStyles ? JSON.parse(savedCellStyles) : null,
       };
     } catch (e) {
       console.error('Failed to load document:', e);
-      return { docId, grid: null, colWidths: null, rowHeights: null };
+      return { docId, grid: null, colWidths: null, rowHeights: null, cellStyles: null };
     }
   }
 );
@@ -89,10 +91,13 @@ const documentsSlice = createSlice({
   name: 'documents',
   initialState,
   reducers: {
+    // Добавление нового документа
     addDocument: (state, action: PayloadAction<Document>) => {
       state.list.push(action.payload);
       localStorage.setItem('spreadsheet_list', JSON.stringify(state.list));
     },
+
+    // Обновление документа
     updateDocument: (state, action: PayloadAction<{ id: string; name?: string; date?: string }>) => {
       const doc = state.list.find(d => d.id === action.payload.id);
       if (doc) {
@@ -101,13 +106,18 @@ const documentsSlice = createSlice({
         localStorage.setItem('spreadsheet_list', JSON.stringify(state.list));
       }
     },
+
+    // Удаление документа
     deleteDocument: (state, action: PayloadAction<string>) => {
       state.list = state.list.filter(d => d.id !== action.payload);
       localStorage.setItem('spreadsheet_list', JSON.stringify(state.list));
       localStorage.removeItem(`spreadsheet_data_${action.payload}`);
       localStorage.removeItem(`spreadsheet_colwidths_${action.payload}`);
       localStorage.removeItem(`spreadsheet_rowheights_${action.payload}`);
+      localStorage.removeItem(`spreadsheet_cellstyles_${action.payload}`);
     },
+
+    // Дублирование документа
     duplicateDocument: (state, action: PayloadAction<{ oldId: string; newId: string; newName: string }>) => {
       const doc = state.list.find(d => d.id === action.payload.oldId);
       if (doc) {
@@ -121,21 +131,26 @@ const documentsSlice = createSlice({
         state.list.push(newDoc);
         localStorage.setItem('spreadsheet_list', JSON.stringify(state.list));
 
-        // копируем данные
+        // Копируем данные документа
         const data = localStorage.getItem(`spreadsheet_data_${action.payload.oldId}`);
         const colWidths = localStorage.getItem(`spreadsheet_colwidths_${action.payload.oldId}`);
         const rowHeights = localStorage.getItem(`spreadsheet_rowheights_${action.payload.oldId}`);
+        const cellStyles = localStorage.getItem(`spreadsheet_cellstyles_${action.payload.oldId}`);
         if (data) localStorage.setItem(`spreadsheet_data_${action.payload.newId}`, data);
         if (colWidths) localStorage.setItem(`spreadsheet_colwidths_${action.payload.newId}`, colWidths);
         if (rowHeights) localStorage.setItem(`spreadsheet_rowheights_${action.payload.newId}`, rowHeights);
+        if (cellStyles) localStorage.setItem(`spreadsheet_cellstyles_${action.payload.newId}`, cellStyles);
       }
     },
+
+    // Установка активного документа
     setActiveDocId: (state, action: PayloadAction<string | null>) => {
       state.activeDocId = action.payload;
     },
   },
   extraReducers: (builder) => {
     builder
+      // Загрузка списка документов
       .addCase(loadDocuments.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -148,11 +163,12 @@ const documentsSlice = createSlice({
         state.loading = false;
         state.error = action.error.message || 'Ошибка загрузки документов';
       })
+      // Сохранение документа
       .addCase(saveDocument.pending, (state) => {
         state.error = null;
       })
       .addCase(saveDocument.fulfilled, (state) => {
-        // обновляем дату изменения документа
+        // Обновляем дату изменения документа
         const doc = state.list.find(d => d.id === state.activeDocId);
         if (doc) {
           doc.date = new Date().toLocaleDateString();
@@ -162,6 +178,7 @@ const documentsSlice = createSlice({
       .addCase(saveDocument.rejected, (state, action) => {
         state.error = action.error.message || 'Ошибка сохранения';
       })
+      // Загрузка документа
       .addCase(loadDocument.pending, (state) => {
         state.loading = true;
       })

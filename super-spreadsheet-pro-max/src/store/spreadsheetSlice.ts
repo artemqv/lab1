@@ -1,6 +1,6 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-// интерфейс для стилей ячейки
+// Интерфейс для стилей ячейки
 interface CellStyle {
   bold?: boolean;
   italic?: boolean;
@@ -11,15 +11,15 @@ interface CellStyle {
   format?: 'number' | 'percent' | 'currency' | 'date';
 }
 
-// интерфейс для состояния таблицы
+// Интерфейс для состояния таблицы
 interface SpreadsheetState {
   grid: string[][];
-  cellStyles: Record<string, CellStyle>; // ключ: "r-c"
+  cellStyles: Record<string, CellStyle>;
   colWidths: number[];
   rowHeights: number[];
   activeCell: { r: number; c: number };
   selectionRange: { start: { r: number; c: number }; end: { r: number; c: number } } | null;
-  history: string[][][]; // история для undo/redo
+  history: string[][][];
   historyIndex: number;
   editing: boolean;
   clipboard: { cells: Array<{ r: number; c: number; value: string; style?: CellStyle }>; mode: 'copy' | 'cut' } | null;
@@ -28,7 +28,7 @@ interface SpreadsheetState {
 const DEFAULT_ROWS = 100;
 const DEFAULT_COLS = 26;
 
-// создаем пустую таблицу
+// Создаем пустую таблицу
 const createEmptyGrid = (rows = DEFAULT_ROWS, cols = DEFAULT_COLS) =>
   Array(rows).fill("").map(() => Array(cols).fill(""));
 
@@ -49,52 +49,62 @@ const spreadsheetSlice = createSlice({
   name: 'spreadsheet',
   initialState,
   reducers: {
-    // устанавливаем всю таблицу целиком
+    // Устанавливаем всю таблицу целиком
     setGrid: (state, action: PayloadAction<string[][]>) => {
       state.grid = action.payload;
     },
-    // изменяем значение одной ячейки
+
+    // Изменяем значение одной ячейки
     setCellValue: (state, action: PayloadAction<{ r: number; c: number; value: string }>) => {
       const { r, c, value } = action.payload;
-      // сохраняем в историю перед изменением
+
+      // Сохраняем в историю перед изменением
       if (state.historyIndex < state.history.length - 1) {
         state.history = state.history.slice(0, state.historyIndex + 1);
       }
       state.history.push(JSON.parse(JSON.stringify(state.grid)));
-      if (state.history.length > 50) state.history.shift(); // ограничиваем историю 50 шагами
+      if (state.history.length > 50) state.history.shift();
       else state.historyIndex++;
 
       state.grid[r][c] = value;
     },
-    // активная ячейка
+
+    // Устанавливаем активную ячейку
     setActiveCell: (state, action: PayloadAction<{ r: number; c: number }>) => {
       state.activeCell = action.payload;
     },
-    // выделенный диапазон
+
+    // Устанавливаем выделенный диапазон
     setSelectionRange: (state, action: PayloadAction<{ start: { r: number; c: number }; end: { r: number; c: number } } | null>) => {
       state.selectionRange = action.payload;
     },
+
     setColWidths: (state, action: PayloadAction<number[]>) => {
       state.colWidths = action.payload;
     },
+
     setRowHeights: (state, action: PayloadAction<number[]>) => {
       state.rowHeights = action.payload;
     },
-    // обновляем ширину одной колонки
+
+    // Обновляем ширину одной колонки
     updateColWidth: (state, action: PayloadAction<{ index: number; width: number }>) => {
       state.colWidths[action.payload.index] = action.payload.width;
     },
-    // обновляем высоту одной строки
+
+    // Обновляем высоту одной строки
     updateRowHeight: (state, action: PayloadAction<{ index: number; height: number }>) => {
       state.rowHeights[action.payload.index] = action.payload.height;
     },
-    // вставка строки
+
+    // Вставка строки
     insertRow: (state, action: PayloadAction<number>) => {
       const index = action.payload;
       state.grid.splice(index, 0, Array(state.grid[0].length).fill(""));
       state.rowHeights.splice(index, 0, 32);
     },
-    // удаление строки
+
+    // Удаление строки
     deleteRow: (state, action: PayloadAction<number>) => {
       const index = action.payload;
       if (state.grid.length > 1) {
@@ -102,7 +112,8 @@ const spreadsheetSlice = createSlice({
         state.rowHeights.splice(index, 1);
       }
     },
-    // вставка колонки
+
+    // Вставка колонки
     insertColumn: (state, action: PayloadAction<number>) => {
       const index = action.payload;
       state.grid.forEach(row => {
@@ -110,7 +121,8 @@ const spreadsheetSlice = createSlice({
       });
       state.colWidths.splice(index, 0, 100);
     },
-    // удаление колонки
+
+    // Удаление колонки
     deleteColumn: (state, action: PayloadAction<number>) => {
       const index = action.payload;
       if (state.grid[0].length > 1) {
@@ -120,30 +132,35 @@ const spreadsheetSlice = createSlice({
         state.colWidths.splice(index, 1);
       }
     },
-    // отмена последнего действия
+
+    // Отмена последнего действия (Undo)
     undo: (state) => {
       if (state.historyIndex > 0) {
         state.historyIndex--;
         state.grid = JSON.parse(JSON.stringify(state.history[state.historyIndex]));
       }
     },
-    // повтор отмененного действия
+
+    // Повтор отмененного действия (Redo)
     redo: (state) => {
       if (state.historyIndex < state.history.length - 1) {
         state.historyIndex++;
         state.grid = JSON.parse(JSON.stringify(state.history[state.historyIndex]));
       }
     },
+
     setEditing: (state, action: PayloadAction<boolean>) => {
       state.editing = action.payload;
     },
-    // установка стиля ячейки
+
+    // Установка стиля ячейки
     setCellStyle: (state, action: PayloadAction<{ r: number; c: number; style: Partial<CellStyle> }>) => {
       const { r, c, style } = action.payload;
       const key = `${r}-${c}`;
       state.cellStyles[key] = { ...state.cellStyles[key], ...style };
     },
-    // копирование ячеек
+
+    // Копирование ячеек
     copyCells: (state) => {
       if (!state.selectionRange) {
         const { r, c } = state.activeCell;
@@ -164,7 +181,8 @@ const spreadsheetSlice = createSlice({
         state.clipboard = { cells, mode: 'copy' };
       }
     },
-    // вырезание ячеек
+
+    // Вырезание ячеек
     cutCells: (state) => {
       if (!state.selectionRange) {
         const { r, c } = state.activeCell;
@@ -189,7 +207,8 @@ const spreadsheetSlice = createSlice({
         state.clipboard = { cells, mode: 'cut' };
       }
     },
-    // вставка ячеек
+
+    // Вставка ячеек
     pasteCells: (state) => {
       if (!state.clipboard) return;
       const { r: startR, c: startC } = state.activeCell;
@@ -207,21 +226,24 @@ const spreadsheetSlice = createSlice({
         }
       });
     },
-    // очистка ячейки
+
+    // Очистка ячейки
     clearCell: (state, action: PayloadAction<{ r: number; c: number }>) => {
       const { r, c } = action.payload;
       state.grid[r][c] = '';
       const key = `${r}-${c}`;
       delete state.cellStyles[key];
     },
-    // выделить все
+
+    // Выделить все ячейки
     selectAll: (state) => {
       state.selectionRange = {
         start: { r: 0, c: 0 },
         end: { r: state.grid.length - 1, c: state.grid[0].length - 1 },
       };
     },
-    // сброс всего состояния
+
+    // Сброс всего состояния
     resetSpreadsheet: () => {
       return initialState;
     },

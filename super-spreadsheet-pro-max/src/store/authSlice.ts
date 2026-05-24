@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
+// Интерфейс пользователя
 interface User {
   id: string;
   name: string;
@@ -7,6 +8,7 @@ interface User {
   createdAt?: string;
 }
 
+// Интерфейс состояния аутентификации
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
@@ -15,13 +17,8 @@ interface AuthState {
 }
 
 const initialState: AuthState = {
-  user: {
-    id: 'mock-user-1',
-    name: 'Тестовый пользователь',
-    email: 'test@example.com',
-    createdAt: '2026-01-15',
-  },
-  isAuthenticated: true,
+  user: null,
+  isAuthenticated: false,
   loading: false,
   error: null,
 };
@@ -30,16 +27,23 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
+    // Установка пользователя
     setUser: (state, action: PayloadAction<User | null>) => {
       state.user = action.payload;
       state.isAuthenticated = !!action.payload;
     },
+
+    // Установка статуса загрузки
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
     },
+
+    // Установка ошибки
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
+
+    // Выход из системы
     logout: (state) => {
       state.user = null;
       state.isAuthenticated = false;

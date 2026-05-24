@@ -2,32 +2,32 @@ import type { Middleware } from '@reduxjs/toolkit';
 import { saveDocument } from './documentsSlice';
 import { setSaveStatus, setHasUnsavedChanges } from './uiSlice';
 
-// таймер для дебаунса автосохранения
+// Таймер для дебаунса автосохранения
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// middleware для автоматического сохранения изменений
+// Middleware для автоматического сохранения изменений с задержкой 500мс
 export const autoSaveMiddleware: Middleware = (store) => (next) => (action: any) => {
   const result = next(action);
 
-  // отслеживаем изменения в spreadsheet
+  // Отслеживаем изменения в таблице
   if (action.type?.startsWith('spreadsheet/')) {
     const state = store.getState() as any;
-    const { grid, colWidths, rowHeights } = state.spreadsheet;
+    const { grid, colWidths, rowHeights, cellStyles } = state.spreadsheet;
     const { activeDocId } = state.documents;
 
     if (activeDocId) {
-      // показываем статус "сохранение"
+      // Показываем статус "сохранение"
       store.dispatch(setSaveStatus('saving') as any);
       store.dispatch(setHasUnsavedChanges(true) as any);
 
-      // очищаем предыдущий таймер
+      // Очищаем предыдущий таймер
       if (saveTimeout) {
         clearTimeout(saveTimeout);
       }
 
-      // запускаем новый таймер на 500мс
+      // Запускаем новый таймер на 500мс
       saveTimeout = setTimeout(() => {
-        store.dispatch(saveDocument({ docId: activeDocId, grid, colWidths, rowHeights }) as any)
+        store.dispatch(saveDocument({ docId: activeDocId, grid, colWidths, rowHeights, cellStyles }) as any)
           .then(() => {
             store.dispatch(setSaveStatus('saved') as any);
             store.dispatch(setHasUnsavedChanges(false) as any);

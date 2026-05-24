@@ -47,13 +47,34 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
   const [inputValue, setInputValue] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // загрузка сейвддаты
+  // Загрузка данных документа
   useEffect(() => {
     dispatch(loadDocument(docId)).then((result: any) => {
       if (result.payload) {
-        if (Array.isArray(result.payload.grid)) dispatch(setGrid(result.payload.grid));
+        // Если есть сохраненная таблица - загружаем её
+        if (Array.isArray(result.payload.grid)) {
+          dispatch(setGrid(result.payload.grid));
+        } else {
+          // Если таблицы нет - создаем новую с размером из документа
+          const docs = JSON.parse(localStorage.getItem('spreadsheet_list') || '[]');
+          const doc = docs.find((d: any) => d.id === docId);
+          if (doc && doc.rows && doc.cols) {
+            const newGrid = Array(doc.rows).fill("").map(() => Array(doc.cols).fill(""));
+            dispatch(setGrid(newGrid));
+            dispatch(setColWidths(Array(doc.cols).fill(100)));
+            dispatch(setRowHeights(Array(doc.rows).fill(32)));
+          }
+        }
+
         if (Array.isArray(result.payload.colWidths)) dispatch(setColWidths(result.payload.colWidths));
         if (Array.isArray(result.payload.rowHeights)) dispatch(setRowHeights(result.payload.rowHeights));
+        if (result.payload.cellStyles) {
+          // Загружаем стили ячеек
+          Object.entries(result.payload.cellStyles).forEach(([key, style]) => {
+            const [r, c] = key.split('-').map(Number);
+            dispatch(setCellStyle({ r, c, style: style as any }));
+          });
+        }
       }
     });
     document.documentElement.setAttribute('data-theme', theme);
@@ -235,11 +256,14 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
 
   const handleCellClick = (r: number, c: number, e: React.MouseEvent) => {
     if (e.shiftKey && selectionRange) {
+      // При Shift расширяем выделение от начальной точки
       dispatch(setSelectionRangeAction({ start: selectionRange.start, end: { r, c } }));
+      dispatch(setActiveCellAction({ r, c }));
     } else {
+      // Обычный клик - новое выделение
       dispatch(setSelectionRangeAction({ start: { r, c }, end: { r, c } }));
+      dispatch(setActiveCellAction({ r, c }));
     }
-    dispatch(setActiveCellAction({ r, c }));
     dispatch(setEditingAction(false));
   };
 
