@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 /* серая подсветка выделенного диапазона (не активной ячейки) */
 .cell-wrapper.in-selection {
   background-color: rgba(59, 130, 246, 0.15);
@@ -73,9 +75,10 @@
 
 .cell-wrapper {
   background-color: var(--bg-cell);
-  height: 32px;
+  min-height: 32px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: 6px;
   position: relative;
   outline: none;
   overflow: hidden;

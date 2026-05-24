@@ -1,31 +1,43 @@
-import { useState } from 'react';
-import Dashboard from './Dashboard';
-import Spreadsheet from './Spreadsheet';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from './store/hooks';
+import { loadDocuments } from './store/documentsSlice';
+import AppLayout from './layouts/AppLayout';
+import DashboardPage from './pages/DashboardPage';
+import SpreadsheetPage from './pages/SpreadsheetPage';
+import ProfilePage from './pages/ProfilePage';
+import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
-  //хранение айдишника
-  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const dispatch = useAppDispatch();
+  const loading = useAppSelector((state) => state.documents.loading);
+  const docs = useAppSelector((state) => state.documents.list);
+
+  useEffect(() => {
+    dispatch(loadDocuments());
+  }, [dispatch]);
+
+  // показываем загрузку только если нет документов и идет загрузка
+  if (loading && docs.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#0b0e11] font-sans flex items-center justify-center">
+        <div className="text-white text-xl">Загрузка...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#0b0e11] font-sans selection:bg-blue-500/30">
-      {activeDocId ? (
-        // условие: если айди есть то выполняем
-        <div className="relative h-screen flex flex-col">
-          {/* Кнопка возврата к списку документов */}
-          <button 
-            onClick={() => setActiveDocId(null)}
-            className="fixed bottom-6 right-6 z-50 bg-slate-800 hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-2xl border border-slate-700 transition-all active:scale-95"
-          >
-            ← На главную
-          </button>
-          
-          <Spreadsheet docId={activeDocId} />
-        </div>
-      ) : (
-        //элз:
-        <Dashboard onSelectDoc={(id) => setActiveDocId(id)} />
-      )}
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route element={<AppLayout />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/documents/:documentId" element={<SpreadsheetPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+        </Route>
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
