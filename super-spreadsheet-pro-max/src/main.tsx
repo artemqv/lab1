@@ -6,7 +6,7 @@ import App from './App'
 import './index.css'
 
 // Глобальный обработчик ошибок для отладки
-window.onerror = function(msg, url, lineNo, columnNo, error) {
+window.onerror = function(msg, _url, _lineNo, _columnNo, error) {
   console.error('Runtime Error:', msg, error);
   const root = document.getElementById('root');
   if (root && root.innerHTML === '') {

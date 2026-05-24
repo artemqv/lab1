@@ -1,8 +1,20 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
+// интерфейс для стилей ячейки
+interface CellStyle {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  backgroundColor?: string;
+  textColor?: string;
+  alignment?: 'left' | 'center' | 'right';
+  format?: 'number' | 'percent' | 'currency' | 'date';
+}
+
 // интерфейс для состояния таблицы
 interface SpreadsheetState {
   grid: string[][];
+  cellStyles: Record<string, CellStyle>; // ключ: "r-c"
   colWidths: number[];
   rowHeights: number[];
   activeCell: { r: number; c: number };
@@ -10,6 +22,7 @@ interface SpreadsheetState {
   history: string[][][]; // история для undo/redo
   historyIndex: number;
   editing: boolean;
+  clipboard: { cells: Array<{ r: number; c: number; value: string; style?: CellStyle }>; mode: 'copy' | 'cut' } | null;
 }
 
 const DEFAULT_ROWS = 100;
@@ -21,6 +34,7 @@ const createEmptyGrid = (rows = DEFAULT_ROWS, cols = DEFAULT_COLS) =>
 
 const initialState: SpreadsheetState = {
   grid: createEmptyGrid(),
+  cellStyles: {},
   colWidths: Array(DEFAULT_COLS).fill(100),
   rowHeights: Array(DEFAULT_ROWS).fill(32),
   activeCell: { r: 0, c: 0 },
@@ -28,6 +42,7 @@ const initialState: SpreadsheetState = {
   history: [],
   historyIndex: -1,
   editing: false,
+  clipboard: null,
 };
 
 const spreadsheetSlice = createSlice({
@@ -122,6 +137,90 @@ const spreadsheetSlice = createSlice({
     setEditing: (state, action: PayloadAction<boolean>) => {
       state.editing = action.payload;
     },
+    // установка стиля ячейки
+    setCellStyle: (state, action: PayloadAction<{ r: number; c: number; style: Partial<CellStyle> }>) => {
+      const { r, c, style } = action.payload;
+      const key = `${r}-${c}`;
+      state.cellStyles[key] = { ...state.cellStyles[key], ...style };
+    },
+    // копирование ячеек
+    copyCells: (state) => {
+      if (!state.selectionRange) {
+        const { r, c } = state.activeCell;
+        const key = `${r}-${c}`;
+        state.clipboard = {
+          cells: [{ r, c, value: state.grid[r][c], style: state.cellStyles[key] }],
+          mode: 'copy',
+        };
+      } else {
+        const { start, end } = state.selectionRange;
+        const cells = [];
+        for (let r = Math.min(start.r, end.r); r <= Math.max(start.r, end.r); r++) {
+          for (let c = Math.min(start.c, end.c); c <= Math.max(start.c, end.c); c++) {
+            const key = `${r}-${c}`;
+            cells.push({ r, c, value: state.grid[r][c], style: state.cellStyles[key] });
+          }
+        }
+        state.clipboard = { cells, mode: 'copy' };
+      }
+    },
+    // вырезание ячеек
+    cutCells: (state) => {
+      if (!state.selectionRange) {
+        const { r, c } = state.activeCell;
+        const key = `${r}-${c}`;
+        state.clipboard = {
+          cells: [{ r, c, value: state.grid[r][c], style: state.cellStyles[key] }],
+          mode: 'cut',
+        };
+        state.grid[r][c] = '';
+        delete state.cellStyles[key];
+      } else {
+        const { start, end } = state.selectionRange;
+        const cells = [];
+        for (let r = Math.min(start.r, end.r); r <= Math.max(start.r, end.r); r++) {
+          for (let c = Math.min(start.c, end.c); c <= Math.max(start.c, end.c); c++) {
+            const key = `${r}-${c}`;
+            cells.push({ r, c, value: state.grid[r][c], style: state.cellStyles[key] });
+            state.grid[r][c] = '';
+            delete state.cellStyles[key];
+          }
+        }
+        state.clipboard = { cells, mode: 'cut' };
+      }
+    },
+    // вставка ячеек
+    pasteCells: (state) => {
+      if (!state.clipboard) return;
+      const { r: startR, c: startC } = state.activeCell;
+      state.clipboard.cells.forEach((cell) => {
+        const offsetR = cell.r - state.clipboard!.cells[0].r;
+        const offsetC = cell.c - state.clipboard!.cells[0].c;
+        const targetR = startR + offsetR;
+        const targetC = startC + offsetC;
+        if (targetR < state.grid.length && targetC < state.grid[0].length) {
+          state.grid[targetR][targetC] = cell.value;
+          if (cell.style) {
+            const key = `${targetR}-${targetC}`;
+            state.cellStyles[key] = { ...cell.style };
+          }
+        }
+      });
+    },
+    // очистка ячейки
+    clearCell: (state, action: PayloadAction<{ r: number; c: number }>) => {
+      const { r, c } = action.payload;
+      state.grid[r][c] = '';
+      const key = `${r}-${c}`;
+      delete state.cellStyles[key];
+    },
+    // выделить все
+    selectAll: (state) => {
+      state.selectionRange = {
+        start: { r: 0, c: 0 },
+        end: { r: state.grid.length - 1, c: state.grid[0].length - 1 },
+      };
+    },
     // сброс всего состояния
     resetSpreadsheet: () => {
       return initialState;
@@ -145,7 +244,14 @@ export const {
   undo,
   redo,
   setEditing,
+  setCellStyle,
+  copyCells,
+  cutCells,
+  pasteCells,
+  clearCell,
+  selectAll,
   resetSpreadsheet,
 } = spreadsheetSlice.actions;
 
 export default spreadsheetSlice.reducer;
+export type { CellStyle };

@@ -18,14 +18,14 @@ const localStorageMock = (() => {
   };
 })();
 
-global.localStorage = localStorageMock as any;
+(globalThis as any).localStorage = localStorageMock;
 
 // Mock document
-global.document = {
+(globalThis as any).document = {
   documentElement: {
     setAttribute: () => {},
   },
-} as any;
+};
 
 // Clear localStorage before each test
 beforeEach(() => {

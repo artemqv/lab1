@@ -4,6 +4,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  createdAt?: string;
 }
 
 interface AuthState {
@@ -18,6 +19,7 @@ const initialState: AuthState = {
     id: 'mock-user-1',
     name: 'Тестовый пользователь',
     email: 'test@example.com',
+    createdAt: '2026-01-15',
   },
   isAuthenticated: true,
   loading: false,

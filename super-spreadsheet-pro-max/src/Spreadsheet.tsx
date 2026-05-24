@@ -16,19 +16,23 @@ import {
   undo,
   redo,
   setEditing as setEditingAction,
+  setCellStyle,
+  copyCells,
+  cutCells,
+  pasteCells,
+  clearCell,
+  selectAll,
 } from './store/spreadsheetSlice';
 import { loadDocument } from './store/documentsSlice';
 import { toggleTheme, setImportProgress, setContextMenu } from './store/uiSlice';
 import { evaluateFormula } from './formulaEngine';
-
-const DEFAULT_ROWS = 100;
-const DEFAULT_COLS = 26;
 
 const deepCopyGrid = (grid: string[][]) => grid.map(row => [...row]);
 
 const Spreadsheet = ({ docId }: { docId: string }) => {
   const dispatch = useAppDispatch();
   const grid = useAppSelector((state) => state.spreadsheet.grid);
+  const cellStyles = useAppSelector((state) => state.spreadsheet.cellStyles);
   const activeCell = useAppSelector((state) => state.spreadsheet.activeCell);
   const editing = useAppSelector((state) => state.spreadsheet.editing);
   const colWidths = useAppSelector((state) => state.spreadsheet.colWidths);
@@ -67,31 +71,102 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  // ручное сохранение Ctrl+S и Undo/Redo
+  // ручное сохранение Ctrl+S и Undo/Redo и форматирование
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Сохранение
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        // ручное сохранение через thunk
         dispatch(loadDocument(docId));
       }
+      // Undo
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         dispatch(undo());
       }
+      // Redo
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
         dispatch(redo());
       }
+      // Форматирование: Bold
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        const key = `${activeCell.r}-${activeCell.c}`;
+        const currentStyle = cellStyles[key] || {};
+        dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { bold: !currentStyle.bold } }));
+      }
+      // Форматирование: Italic
+      if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+        e.preventDefault();
+        const key = `${activeCell.r}-${activeCell.c}`;
+        const currentStyle = cellStyles[key] || {};
+        dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { italic: !currentStyle.italic } }));
+      }
+      // Форматирование: Underline
+      if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
+        e.preventDefault();
+        const key = `${activeCell.r}-${activeCell.c}`;
+        const currentStyle = cellStyles[key] || {};
+        dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { underline: !currentStyle.underline } }));
+      }
+      // Копировать
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        e.preventDefault();
+        dispatch(copyCells());
+      }
+      // Вырезать
+      if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
+        e.preventDefault();
+        dispatch(cutCells());
+      }
+      // Вставить
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault();
+        dispatch(pasteCells());
+      }
+      // Выделить все
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        dispatch(selectAll());
+      }
+      // Очистить ячейку
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !editing) {
+        e.preventDefault();
+        dispatch(clearCell({ r: activeCell.r, c: activeCell.c }));
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch, docId]);
+  }, [dispatch, docId, activeCell, cellStyles, editing]);
 
   const saveEdit = useCallback((val: string) => {
     dispatch(setCellValue({ r: activeCell.r, c: activeCell.c, value: val }));
     dispatch(setEditingAction(false));
   }, [activeCell, dispatch]);
+
+  // форматирование значения ячейки
+  const formatCellValue = (value: string, format?: 'number' | 'percent' | 'currency' | 'date'): string => {
+    if (!format || format === 'number') return value;
+    const num = parseFloat(value);
+    if (isNaN(num)) return value;
+
+    switch (format) {
+      case 'percent':
+        return `${(num * 100).toFixed(2)}%`;
+      case 'currency':
+        return `$${num.toFixed(2)}`;
+      case 'date':
+        try {
+          const date = new Date(value);
+          return isNaN(date.getTime()) ? value : date.toLocaleDateString('ru-RU');
+        } catch {
+          return value;
+        }
+      default:
+        return value;
+    }
+  };
 
   // ширина высота
   const handleColResize = (index: number, e: React.MouseEvent) => {
@@ -195,10 +270,17 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
         }
         dispatch(setActiveCellAction({ r: newR, c: newC }));
       }
-      if (e.key === 'Delete' || e.key === 'Backspace') saveEdit("");
       if (e.key === 'Enter') {
         setInputValue(grid[activeCell.r][activeCell.c]);
         dispatch(setEditingAction(true));
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const newCol = Math.min(grid[0].length - 1, activeCell.c + 1);
+        dispatch(setActiveCellAction({ r: activeCell.r, c: newCol }));
+      }
+      if (e.key === 'Escape') {
+        dispatch(setEditingAction(false));
       }
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         e.preventDefault();
@@ -359,6 +441,102 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
         </div>
       </div>
 
+      {/* Панель форматирования */}
+      <div className="p-2 bg-[var(--bg-header)] border-b border-[var(--border-color)] flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1 border-r border-[var(--border-color)] pr-2">
+          <button
+            onClick={() => {
+              const key = `${activeCell.r}-${activeCell.c}`;
+              const currentStyle = cellStyles[key] || {};
+              dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { bold: !currentStyle.bold } }));
+            }}
+            className={`px-3 py-1 rounded text-sm font-bold ${cellStyles[`${activeCell.r}-${activeCell.c}`]?.bold ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+            title="Жирный (Ctrl+B)"
+          >
+            B
+          </button>
+          <button
+            onClick={() => {
+              const key = `${activeCell.r}-${activeCell.c}`;
+              const currentStyle = cellStyles[key] || {};
+              dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { italic: !currentStyle.italic } }));
+            }}
+            className={`px-3 py-1 rounded text-sm italic ${cellStyles[`${activeCell.r}-${activeCell.c}`]?.italic ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+            title="Курсив (Ctrl+I)"
+          >
+            I
+          </button>
+          <button
+            onClick={() => {
+              const key = `${activeCell.r}-${activeCell.c}`;
+              const currentStyle = cellStyles[key] || {};
+              dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { underline: !currentStyle.underline } }));
+            }}
+            className={`px-3 py-1 rounded text-sm underline ${cellStyles[`${activeCell.r}-${activeCell.c}`]?.underline ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+            title="Подчёркивание (Ctrl+U)"
+          >
+            U
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1 border-r border-[var(--border-color)] pr-2">
+          <label className="text-xs text-[var(--text-muted)] mr-1">Фон:</label>
+          <input
+            type="color"
+            value={cellStyles[`${activeCell.r}-${activeCell.c}`]?.backgroundColor || '#ffffff'}
+            onChange={(e) => dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { backgroundColor: e.target.value } }))}
+            className="w-8 h-8 rounded cursor-pointer"
+            title="Цвет фона"
+          />
+          <label className="text-xs text-[var(--text-muted)] ml-2 mr-1">Текст:</label>
+          <input
+            type="color"
+            value={cellStyles[`${activeCell.r}-${activeCell.c}`]?.textColor || '#000000'}
+            onChange={(e) => dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { textColor: e.target.value } }))}
+            className="w-8 h-8 rounded cursor-pointer"
+            title="Цвет текста"
+          />
+        </div>
+
+        <div className="flex items-center gap-1 border-r border-[var(--border-color)] pr-2">
+          <button
+            onClick={() => dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { alignment: 'left' } }))}
+            className={`px-3 py-1 rounded text-sm ${cellStyles[`${activeCell.r}-${activeCell.c}`]?.alignment === 'left' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+            title="По левому краю"
+          >
+            ⬅
+          </button>
+          <button
+            onClick={() => dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { alignment: 'center' } }))}
+            className={`px-3 py-1 rounded text-sm ${cellStyles[`${activeCell.r}-${activeCell.c}`]?.alignment === 'center' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+            title="По центру"
+          >
+            ↔
+          </button>
+          <button
+            onClick={() => dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { alignment: 'right' } }))}
+            className={`px-3 py-1 rounded text-sm ${cellStyles[`${activeCell.r}-${activeCell.c}`]?.alignment === 'right' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+            title="По правому краю"
+          >
+            ➡
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <label className="text-xs text-[var(--text-muted)] mr-1">Формат:</label>
+          <select
+            value={cellStyles[`${activeCell.r}-${activeCell.c}`]?.format || 'number'}
+            onChange={(e) => dispatch(setCellStyle({ r: activeCell.r, c: activeCell.c, style: { format: e.target.value as 'number' | 'percent' | 'currency' | 'date' } }))}
+            className="bg-gray-700 text-white px-2 py-1 rounded text-xs"
+          >
+            <option value="number">Число</option>
+            <option value="percent">Процент</option>
+            <option value="currency">Валюта</option>
+            <option value="date">Дата</option>
+          </select>
+        </div>
+      </div>
+
       {/* Область таблицы */}
       <div className="flex-1 overflow-auto p-4">
         <div className="spreadsheet-container" style={{ gridTemplateColumns: `40px ${Array.isArray(colWidths) ? colWidths.map(w => `${w}px`).join(' ') : ''}` }}>
@@ -378,13 +556,32 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
               {Array.isArray(row) && row.map((cell, c) => {
                 const active = activeCell.r === r && activeCell.c === c;
                 const inSelection = isInRange(r, c);
+                const cellKey = `${r}-${c}`;
+                const style = cellStyles[cellKey] || {};
+
+                const cellStyle: React.CSSProperties = {
+                  height: `${Array.isArray(rowHeights) ? rowHeights[r] : 32}px`,
+                  backgroundColor: style.backgroundColor,
+                  color: style.textColor,
+                  fontWeight: style.bold ? 'bold' : 'normal',
+                  fontStyle: style.italic ? 'italic' : 'normal',
+                  textDecoration: style.underline ? 'underline' : 'none',
+                  textAlign: style.alignment || 'left',
+                };
+
+                let displayValue = cell;
+                if (cell.startsWith('=')) {
+                  displayValue = evaluateFormula(cell, grid);
+                }
+                displayValue = formatCellValue(displayValue, style.format);
+
                 return (
-                  <div key={c} className={`cell-wrapper ${active ? 'active' : ''} ${inSelection && !active ? 'in-selection' : ''}`} style={{ height: `${Array.isArray(rowHeights) ? rowHeights[r] : 32}px` }} onClick={(e) => handleCellClick(r, c, e)} onDoubleClick={() => { setInputValue(cell); dispatch(setEditingAction(true)); }}>
+                  <div key={c} className={`cell-wrapper ${active ? 'active' : ''} ${inSelection && !active ? 'in-selection' : ''}`} style={cellStyle} onClick={(e) => handleCellClick(r, c, e)} onDoubleClick={() => { setInputValue(cell); dispatch(setEditingAction(true)); }}>
                     {editing && active ? (
                       <input autoFocus className="cell-input-fixed" value={inputValue} onChange={(e) => setInputValue(e.target.value)} onBlur={() => saveEdit(inputValue)} onKeyDown={(e) => e.key === 'Enter' && saveEdit(inputValue)} />
                     ) : (
-                      <div className="w-full px-2 truncate text-sm text-[var(--text-main)]">
-                        {cell.startsWith('=') ? <span className="text-blue-400">{evaluateFormula(cell, grid)}</span> : cell}
+                      <div className="w-full px-2 truncate text-sm" style={{ color: style.textColor || 'var(--text-main)' }}>
+                        {cell.startsWith('=') ? <span className="text-blue-400">{displayValue}</span> : displayValue}
                       </div>
                     )}
                   </div>

@@ -14,6 +14,7 @@ import spreadsheetReducer, {
 describe('spreadsheetSlice', () => {
   const initialState = {
     grid: [['', ''], ['', '']],
+    cellStyles: {},
     colWidths: [100, 100],
     rowHeights: [32, 32],
     activeCell: { r: 0, c: 0 },
@@ -21,6 +22,7 @@ describe('spreadsheetSlice', () => {
     history: [],
     historyIndex: -1,
     editing: false,
+    clipboard: null,
   };
 
   it('setGrid updates grid', () => {
