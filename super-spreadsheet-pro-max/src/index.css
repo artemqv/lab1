@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* серая подсветка выделенного диапазона (не активной ячейки) */
 .cell-wrapper.in-selection {
   background-color: rgba(59, 130, 246, 0.15);

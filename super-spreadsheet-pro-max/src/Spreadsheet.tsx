@@ -1,58 +1,97 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useAppDispatch, useAppSelector } from './store/hooks';
+import {
+  setGrid,
+  setCellValue,
+  setActiveCell as setActiveCellAction,
+  setSelectionRange as setSelectionRangeAction,
+  setColWidths,
+  setRowHeights,
+  updateColWidth,
+  updateRowHeight,
+  insertRow as insertRowAction,
+  deleteRow as deleteRowAction,
+  insertColumn as insertColumnAction,
+  deleteColumn as deleteColumnAction,
+  undo,
+  redo,
+  setEditing as setEditingAction,
+} from './store/spreadsheetSlice';
+import { loadDocument } from './store/documentsSlice';
+import { toggleTheme, setImportProgress, setContextMenu } from './store/uiSlice';
 import { evaluateFormula } from './formulaEngine';
 
 const DEFAULT_ROWS = 100;
 const DEFAULT_COLS = 26;
 
-const createEmptyGrid = (rows = DEFAULT_ROWS, cols = DEFAULT_COLS) =>
-  Array(rows).fill("").map(() => Array(cols).fill(""));
-
 const deepCopyGrid = (grid: string[][]) => grid.map(row => [...row]);
 
 const Spreadsheet = ({ docId }: { docId: string }) => {
-  const [grid, setGrid] = useState<string[][]>(createEmptyGrid());
-  const [activeCell, setActiveCell] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
-  const [editing, setEditing] = useState(false);
+  const dispatch = useAppDispatch();
+  const grid = useAppSelector((state) => state.spreadsheet.grid);
+  const activeCell = useAppSelector((state) => state.spreadsheet.activeCell);
+  const editing = useAppSelector((state) => state.spreadsheet.editing);
+  const colWidths = useAppSelector((state) => state.spreadsheet.colWidths);
+  const rowHeights = useAppSelector((state) => state.spreadsheet.rowHeights);
+  const selectionRange = useAppSelector((state) => state.spreadsheet.selectionRange);
+  const theme = useAppSelector((state) => state.ui.theme);
+  const saveStatus = useAppSelector((state) => state.ui.saveStatus);
+  const hasUnsavedChanges = useAppSelector((state) => state.ui.hasUnsavedChanges);
+  const importProgress = useAppSelector((state) => state.ui.importProgress);
+  const contextMenu = useAppSelector((state) => state.ui.contextMenu);
+
   const [inputValue, setInputValue] = useState("");
-  const [colWidths, setColWidths] = useState<number[]>(Array(DEFAULT_COLS).fill(100));
-  const [rowHeights, setRowHeights] = useState<number[]>(Array(DEFAULT_ROWS).fill(32));
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [selectionRange, setSelectionRange] = useState<{ start: { r: number; c: number }; end: { r: number; c: number } } | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; type: 'row' | 'col'; index: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [importProgress, setImportProgress] = useState<string | null>(null);
 
   // загрузка сейвддаты
   useEffect(() => {
-    const saved = localStorage.getItem(`spreadsheet_data_${docId}`);
-    const savedColWidths = localStorage.getItem(`spreadsheet_colwidths_${docId}`);
-    const savedRowHeights = localStorage.getItem(`spreadsheet_rowheights_${docId}`);
-    setGrid(saved ? JSON.parse(saved) : createEmptyGrid());
-    if (savedColWidths) setColWidths(JSON.parse(savedColWidths));
-    if (savedRowHeights) setRowHeights(JSON.parse(savedRowHeights));
+    dispatch(loadDocument(docId)).then((result: any) => {
+      if (result.payload) {
+        if (Array.isArray(result.payload.grid)) dispatch(setGrid(result.payload.grid));
+        if (Array.isArray(result.payload.colWidths)) dispatch(setColWidths(result.payload.colWidths));
+        if (Array.isArray(result.payload.rowHeights)) dispatch(setRowHeights(result.payload.rowHeights));
+      }
+    });
     document.documentElement.setAttribute('data-theme', theme);
-  }, [docId, theme]);
+  }, [docId, theme, dispatch]);
 
-  // автосейв
+  // предупреждение при закрытии с несохраненными изменениями
   useEffect(() => {
-    if (grid.length) {
-      const timer = setTimeout(() => {
-        localStorage.setItem(`spreadsheet_data_${docId}`, JSON.stringify(grid));
-        localStorage.setItem(`spreadsheet_colwidths_${docId}`, JSON.stringify(colWidths));
-        localStorage.setItem(`spreadsheet_rowheights_${docId}`, JSON.stringify(rowHeights));
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [grid, colWidths, rowHeights, docId]);
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // ручное сохранение Ctrl+S и Undo/Redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        // ручное сохранение через thunk
+        dispatch(loadDocument(docId));
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        dispatch(undo());
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        dispatch(redo());
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [dispatch, docId]);
 
   const saveEdit = useCallback((val: string) => {
-    setGrid(prev => {
-      const newGrid = deepCopyGrid(prev);
-      newGrid[activeCell.r][activeCell.c] = val;
-      return newGrid;
-    });
-    setEditing(false);
-  }, [activeCell]);
+    dispatch(setCellValue({ r: activeCell.r, c: activeCell.c, value: val }));
+    dispatch(setEditingAction(false));
+  }, [activeCell, dispatch]);
 
   // ширина высота
   const handleColResize = (index: number, e: React.MouseEvent) => {
@@ -61,11 +100,7 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
     const startWidth = colWidths[index];
     const onMouseMove = (me: MouseEvent) => {
       const newWidth = Math.max(50, startWidth + (me.pageX - startX));
-      setColWidths(prev => {
-        const next = [...prev];
-        next[index] = newWidth;
-        return next;
-      });
+      dispatch(updateColWidth({ index, width: newWidth }));
     };
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
@@ -81,11 +116,7 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
     const startHeight = rowHeights[index];
     const onMouseMove = (me: MouseEvent) => {
       const newHeight = Math.max(20, startHeight + (me.pageY - startY));
-      setRowHeights(prev => {
-        const next = [...prev];
-        next[index] = newHeight;
-        return next;
-      });
+      dispatch(updateRowHeight({ index, height: newHeight }));
     };
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
@@ -97,86 +128,44 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
 
   // Добавление / удаление строк / колонок
   const insertRow = useCallback((index: number) => {
-    setGrid(prev => {
-      const newGrid = deepCopyGrid(prev);
-      newGrid.splice(index, 0, Array(prev[0].length).fill(""));
-      newGrid.pop();
-      return newGrid;
-    });
-    setRowHeights(prev => {
-      const newHeights = [...prev];
-      newHeights.splice(index, 0, 32);
-      newHeights.pop();
-      return newHeights;
-    });
-    if (activeCell.r >= index) setActiveCell(prev => ({ ...prev, r: Math.min(prev.r + 1, DEFAULT_ROWS - 1) }));
-  }, [activeCell.r]);
+    dispatch(insertRowAction(index));
+    if (activeCell.r >= index) dispatch(setActiveCellAction({ ...activeCell, r: Math.min(activeCell.r + 1, DEFAULT_ROWS - 1) }));
+  }, [activeCell, dispatch]);
 
   const deleteRow = useCallback((index: number) => {
-    setGrid(prev => {
-      const newGrid = deepCopyGrid(prev);
-      newGrid.splice(index, 1);
-      newGrid.push(Array(prev[0].length).fill(""));
-      return newGrid;
-    });
-    setRowHeights(prev => {
-      const newHeights = [...prev];
-      newHeights.splice(index, 1);
-      newHeights.push(32);
-      return newHeights;
-    });
-    if (activeCell.r === index) setActiveCell(prev => ({ ...prev, r: Math.max(0, prev.r - 1) }));
-    else if (activeCell.r > index) setActiveCell(prev => ({ ...prev, r: prev.r - 1 }));
-  }, [activeCell.r]);
+    dispatch(deleteRowAction(index));
+    if (activeCell.r === index) dispatch(setActiveCellAction({ ...activeCell, r: Math.max(0, activeCell.r - 1) }));
+    else if (activeCell.r > index) dispatch(setActiveCellAction({ ...activeCell, r: activeCell.r - 1 }));
+  }, [activeCell, dispatch]);
 
   const insertColumn = useCallback((index: number) => {
-    setGrid(prev => deepCopyGrid(prev).map(row => {
-      row.splice(index, 0, "");
-      row.pop();
-      return row;
-    }));
-    setColWidths(prev => {
-      const newWidths = [...prev];
-      newWidths.splice(index, 0, 100);
-      newWidths.pop();
-      return newWidths;
-    });
-    if (activeCell.c >= index) setActiveCell(prev => ({ ...prev, c: Math.min(prev.c + 1, DEFAULT_COLS - 1) }));
-  }, [activeCell.c]);
+    dispatch(insertColumnAction(index));
+    if (activeCell.c >= index) dispatch(setActiveCellAction({ ...activeCell, c: Math.min(activeCell.c + 1, DEFAULT_COLS - 1) }));
+  }, [activeCell, dispatch]);
 
   const deleteColumn = useCallback((index: number) => {
-    setGrid(prev => deepCopyGrid(prev).map(row => {
-      row.splice(index, 1);
-      row.push("");
-      return row;
-    }));
-    setColWidths(prev => {
-      const newWidths = [...prev];
-      newWidths.splice(index, 1);
-      newWidths.push(100);
-      return newWidths;
-    });
-    if (activeCell.c === index) setActiveCell(prev => ({ ...prev, c: Math.max(0, prev.c - 1) }));
-    else if (activeCell.c > index) setActiveCell(prev => ({ ...prev, c: prev.c - 1 }));
-  }, [activeCell.c]);
+    dispatch(deleteColumnAction(index));
+    if (activeCell.c === index) dispatch(setActiveCellAction({ ...activeCell, c: Math.max(0, activeCell.c - 1) }));
+    else if (activeCell.c > index) dispatch(setActiveCellAction({ ...activeCell, c: activeCell.c - 1 }));
+  }, [activeCell, dispatch]);
 
   // контекстное меню
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setContextMenu(null);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) dispatch(setContextMenu(null));
     };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, []);
+  }, [dispatch]);
 
   const handleCellClick = (r: number, c: number, e: React.MouseEvent) => {
     if (e.shiftKey && selectionRange) {
-      setSelectionRange({ start: selectionRange.start, end: { r, c } });
+      dispatch(setSelectionRangeAction({ start: selectionRange.start, end: { r, c } }));
     } else {
-      setSelectionRange({ start: { r, c }, end: { r, c } });
+      dispatch(setSelectionRangeAction({ start: { r, c }, end: { r, c } }));
     }
-    setActiveCell({ r, c });
-    setEditing(false);
+    dispatch(setActiveCellAction({ r, c }));
+    dispatch(setEditingAction(false));
   };
 
   const isInRange = (r: number, c: number): boolean => {
@@ -200,30 +189,30 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
       if (newR !== activeCell.r || newC !== activeCell.c) {
         e.preventDefault();
         if (e.shiftKey && selectionRange) {
-          setSelectionRange({ start: selectionRange.start, end: { r: newR, c: newC } });
+          dispatch(setSelectionRangeAction({ start: selectionRange.start, end: { r: newR, c: newC } }));
         } else {
-          setSelectionRange({ start: { r: newR, c: newC }, end: { r: newR, c: newC } });
+          dispatch(setSelectionRangeAction({ start: { r: newR, c: newC }, end: { r: newR, c: newC } }));
         }
-        setActiveCell({ r: newR, c: newC });
+        dispatch(setActiveCellAction({ r: newR, c: newC }));
       }
       if (e.key === 'Delete' || e.key === 'Backspace') saveEdit("");
       if (e.key === 'Enter') {
         setInputValue(grid[activeCell.r][activeCell.c]);
-        setEditing(true);
+        dispatch(setEditingAction(true));
       }
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         setInputValue(e.key);
-        setEditing(true);
+        dispatch(setEditingAction(true));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeCell, editing, grid, saveEdit, selectionRange]);
+  }, [activeCell, editing, grid, saveEdit, selectionRange, dispatch]);
 
   // выезд csv
   const exportToCSV = () => {
     const rows = grid.map(row =>
-      row.map((cell, cIdx) => {
+      row.map((cell) => {
         let value = cell;
         if (cell.startsWith('=')) {
           value = evaluateFormula(cell, grid);
@@ -261,18 +250,18 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
       if (numRows > workingGrid.length) {
         const extra = numRows - workingGrid.length;
         for (let i = 0; i < extra; i++) workingGrid.push(Array(workingGrid[0].length).fill(""));
-        setRowHeights(prev => [...prev, ...Array(extra).fill(32)]);
+        dispatch(setRowHeights([...rowHeights, ...Array(extra).fill(32)]));
       }
       if (numCols > workingGrid[0].length) {
         const extra = numCols - workingGrid[0].length;
         for (let i = 0; i < workingGrid.length; i++) {
           for (let j = 0; j < extra; j++) workingGrid[i].push("");
         }
-        setColWidths(prev => [...prev, ...Array(extra).fill(100)]);
+        dispatch(setColWidths([...colWidths, ...Array(extra).fill(100)]));
       }
       const CHUNK = 50;
       let start = 0;
-      setImportProgress(`Импорт 0/${numRows} ...`);
+      dispatch(setImportProgress(`Импорт 0/${numRows} ...`));
       const processChunk = () => {
         const end = Math.min(start + CHUNK, numRows);
         for (let i = start; i < end; i++) {
@@ -283,16 +272,55 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
             }
           }
         }
-        setGrid([...workingGrid]);
-        setImportProgress(`Импорт ${end}/${numRows} ...`);
+        dispatch(setGrid([...workingGrid]));
+        dispatch(setImportProgress(`Импорт ${end}/${numRows} ...`));
         start = end;
         if (start < numRows) {
           setTimeout(processChunk, 10);
         } else {
-          setImportProgress(null);
+          dispatch(setImportProgress(null));
         }
       };
       processChunk();
+    };
+    input.click();
+  };
+
+  // экспорт в JSON
+  const exportToJSON = () => {
+    const data = {
+      docId,
+      grid,
+      colWidths,
+      rowHeights,
+      exportDate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `doc_${docId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // импорт JSON
+  const handleImportJSON = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (data.grid) dispatch(setGrid(data.grid));
+        if (data.colWidths) dispatch(setColWidths(data.colWidths));
+        if (data.rowHeights) dispatch(setRowHeights(data.rowHeights));
+      } catch (err) {
+        alert('Ошибка импорта JSON: ' + err);
+      }
     };
     input.click();
   };
@@ -301,11 +329,13 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
     <div className="flex flex-col h-screen select-none bg-[var(--bg-main)]">
       {/* Верхняя панель с hotbar (кнопки + импорт/экспорт) */}
       <div className="p-2 bg-[var(--bg-header)] border-b border-[var(--border-color)] flex items-center gap-2 flex-wrap">
-        <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} className="bg-[var(--accent)] text-white px-3 py-1 rounded text-xs font-bold">
+        <button onClick={() => dispatch(toggleTheme())} className="bg-[var(--accent)] text-white px-3 py-1 rounded text-xs font-bold">
           {theme === 'dark' ? '☀️ LIGHT' : '🌙 DARK'}
         </button>
         <button onClick={exportToCSV} className="bg-green-700 text-white px-3 py-1 rounded text-xs font-bold">📥 CSV</button>
         <button onClick={handleImportCSV} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold">📂 CSV Import</button>
+        <button onClick={exportToJSON} className="bg-green-700 text-white px-3 py-1 rounded text-xs font-bold">📥 JSON</button>
+        <button onClick={handleImportJSON} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold">📂 JSON Import</button>
         <div className="w-px h-6 bg-[var(--border-color)] mx-1"></div>
 
         {/* Кнопки добавления/удаления строк/колонок (hotbar) */}
@@ -313,6 +343,13 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
         <button onClick={() => deleteRow(activeCell.r)} className="bg-red-800 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-bold">🗑️ Строку</button>
         <button onClick={() => insertColumn(activeCell.c)} className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded text-xs font-bold">➕ Колонку левее</button>
         <button onClick={() => deleteColumn(activeCell.c)} className="bg-red-800 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-bold">🗑️ Колонку</button>
+
+        {/* Индикатор статуса сохранения */}
+        <div className="flex items-center gap-2 ml-2">
+          {saveStatus === 'saved' && <span className="text-xs text-green-500">✓ Сохранено</span>}
+          {saveStatus === 'saving' && <span className="text-xs text-yellow-500">⏳ Сохранение...</span>}
+          {saveStatus === 'error' && <span className="text-xs text-red-500">❌ Ошибка сохранения</span>}
+        </div>
 
         {importProgress && <span className="text-xs text-[var(--text-muted)]">{importProgress}</span>}
 
@@ -330,25 +367,25 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
 
       {/* Область таблицы */}
       <div className="flex-1 overflow-auto p-4">
-        <div className="spreadsheet-container" style={{ gridTemplateColumns: `40px ${colWidths.map(w => `${w}px`).join(' ')}` }}>
+        <div className="spreadsheet-container" style={{ gridTemplateColumns: `40px ${Array.isArray(colWidths) ? colWidths.map(w => `${w}px`).join(' ') : ''}` }}>
           <div className="header-cell sticky top-0 left-0 z-40"></div>
-          {colWidths.map((_, i) => (
-            <div key={i} className="header-cell sticky top-0 z-10" style={{ height: '30px' }} onContextMenu={(e) => { e.preventDefault(); setContextMenu({ visible: true, x: e.clientX, y: e.clientY, type: 'col', index: i }); }}>
+          {Array.isArray(colWidths) && colWidths.map((_, i) => (
+            <div key={i} className="header-cell sticky top-0 z-10" style={{ height: '30px' }} onContextMenu={(e) => { e.preventDefault(); dispatch(setContextMenu({ visible: true, x: e.clientX, y: e.clientY, type: 'col', index: i })); }}>
               {String.fromCharCode(65 + i)}
               <div className="resizer" onMouseDown={(e) => handleColResize(i, e)} />
             </div>
           ))}
-          {grid.map((row, r) => (
+          {Array.isArray(grid) && grid.map((row, r) => (
             <React.Fragment key={r}>
-              <div className="header-cell sticky left-0 z-10" style={{ height: `${rowHeights[r]}px`, position: 'relative' }} onContextMenu={(e) => { e.preventDefault(); setContextMenu({ visible: true, x: e.clientX, y: e.clientY, type: 'row', index: r }); }}>
+              <div className="header-cell sticky left-0 z-10" style={{ height: `${Array.isArray(rowHeights) ? rowHeights[r] : 32}px`, position: 'relative' }} onContextMenu={(e) => { e.preventDefault(); dispatch(setContextMenu({ visible: true, x: e.clientX, y: e.clientY, type: 'row', index: r })); }}>
                 {r + 1}
                 <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '4px', cursor: 'row-resize' }} onMouseDown={(e) => handleRowResize(r, e)} />
               </div>
-              {row.map((cell, c) => {
+              {Array.isArray(row) && row.map((cell, c) => {
                 const active = activeCell.r === r && activeCell.c === c;
                 const inSelection = isInRange(r, c);
                 return (
-                  <div key={c} className={`cell-wrapper ${active ? 'active' : ''} ${inSelection && !active ? 'in-selection' : ''}`} onClick={(e) => handleCellClick(r, c, e)} onDoubleClick={() => { setInputValue(cell); setEditing(true); }}>
+                  <div key={c} className={`cell-wrapper ${active ? 'active' : ''} ${inSelection && !active ? 'in-selection' : ''}`} onClick={(e) => handleCellClick(r, c, e)} onDoubleClick={() => { setInputValue(cell); dispatch(setEditingAction(true)); }}>
                     {editing && active ? (
                       <input autoFocus className="cell-input-fixed" value={inputValue} onChange={(e) => setInputValue(e.target.value)} onBlur={() => saveEdit(inputValue)} onKeyDown={(e) => e.key === 'Enter' && saveEdit(inputValue)} />
                     ) : (
@@ -369,14 +406,14 @@ const Spreadsheet = ({ docId }: { docId: string }) => {
         <div ref={menuRef} className="fixed bg-[var(--bg-cell)] border border-[var(--border-color)] rounded shadow-lg z-50 py-1" style={{ top: contextMenu.y, left: contextMenu.x }}>
           {contextMenu.type === 'row' && (
             <>
-              <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-header)]" onClick={() => { insertRow(contextMenu.index); setContextMenu(null); }}>➕ Вставить строку выше</button>
-              <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-header)] text-red-500" onClick={() => { deleteRow(contextMenu.index); setContextMenu(null); }}>🗑️ Удалить строку</button>
+              <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-header)]" onClick={() => { insertRow(contextMenu.index); dispatch(setContextMenu(null)); }}>➕ Вставить строку выше</button>
+              <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-header)] text-red-500" onClick={() => { deleteRow(contextMenu.index); dispatch(setContextMenu(null)); }}>🗑️ Удалить строку</button>
             </>
           )}
           {contextMenu.type === 'col' && (
             <>
-              <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-header)]" onClick={() => { insertColumn(contextMenu.index); setContextMenu(null); }}>➕ Вставить столбец левее</button>
-              <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-header)] text-red-500" onClick={() => { deleteColumn(contextMenu.index); setContextMenu(null); }}>🗑️ Удалить столбец</button>
+              <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-header)]" onClick={() => { insertColumn(contextMenu.index); dispatch(setContextMenu(null)); }}>➕ Вставить столбец левее</button>
+              <button className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--bg-header)] text-red-500" onClick={() => { deleteColumn(contextMenu.index); dispatch(setContextMenu(null)); }}>🗑️ Удалить столбец</button>
             </>
           )}
         </div>
